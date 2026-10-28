@@ -1,0 +1,67 @@
+# WordCell: keep this fork's main a mirror of storytold/deckcraft and merge it into wordcell daily
+# (see WORDCELL.md). A merge that conflicts with WordCell's patches opens one issue instead.
+# Needs the WORDCELL_BOT_TOKEN secret: a fine-grained token with Contents, Workflows and Issues
+# write on lennoxmeldrum/deckcraft and lennoxmeldrum/wordcell (GITHUB_TOKEN can't push commits that
+# touch .github/workflows, which upstream merges often do).
+name: Sync upstream
+on:
+  schedule: [{ cron: "17 4 * * *" }]
+  workflow_dispatch:
+permissions: { contents: write, issues: write }
+concurrency: { group: sync-upstream, cancel-in-progress: false }
+jobs:
+  token:
+    # Until the WORDCELL_BOT_TOKEN secret exists, skip quietly instead of failing every day.
+    runs-on: ubuntu-latest
+    outputs: { ok: "${{ steps.t.outputs.ok }}" }
+    steps:
+      - id: t
+        env: { T: "${{ secrets.WORDCELL_BOT_TOKEN }}" }
+        run: |
+          if [ -n "$T" ]; then echo "ok=true" >> "$GITHUB_OUTPUT"; else
+            echo "::notice::Add the WORDCELL_BOT_TOKEN secret to turn this on (WordCell docs/development.md)."
+            echo "ok=false" >> "$GITHUB_OUTPUT"; fi
+  sync:
+    needs: token
+    if: github.repository == 'lennoxmeldrum/deckcraft' && needs.token.outputs.ok == 'true'
+    runs-on: ubuntu-latest
+    env:
+      UPSTREAM: https://github.com/storytold/deckcraft.git
+      GH_TOKEN: ${{ secrets.WORDCELL_BOT_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: wordcell, fetch-depth: 0, token: "${{ secrets.WORDCELL_BOT_TOKEN }}" }
+      - name: Mirror upstream main
+        run: |
+          git remote add upstream "$UPSTREAM"
+          git fetch upstream main
+          # main is a pure mirror: nothing is ever committed to it, so forcing it is safe.
+          git push origin +refs/remotes/upstream/main:refs/heads/main
+      - name: Merge upstream into wordcell
+        id: merge
+        run: |
+          git config user.name "wordcell-bot"
+          git config user.email "wordcell-bot@users.noreply.github.com"
+          before=$(git rev-parse HEAD)
+          if git merge --no-edit upstream/main; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+            [ "$(git rev-parse HEAD)" != "$before" ] && echo "moved=true" >> "$GITHUB_OUTPUT" || true
+          else
+            git diff --name-only --diff-filter=U > conflicts.txt
+            git merge --abort
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Push
+        if: steps.merge.outputs.ok == 'true' && steps.merge.outputs.moved == 'true'
+        run: git push origin wordcell
+      - name: Report a conflict (once)
+        if: steps.merge.outputs.ok == 'false'
+        run: |
+          if [ "$(gh issue list --label upstream-conflict --state open --json number --jq length)" = "0" ]; then
+            gh label create upstream-conflict --color D93F0B --force
+            { echo "Merging storytold/deckcraft main into wordcell conflicts in:"; echo; sed 's/^/- /' conflicts.txt; echo; echo "Resolve locally: git fetch upstream && git merge upstream/main, keep WordCell's patches (WORDCELL.md), push."; } > body.md
+            gh issue create --label upstream-conflict --title "Upstream merge conflict" --body-file body.md
+          fi
+      - name: Tell WordCell to pick it up
+        if: steps.merge.outputs.moved == 'true'
+        run: gh api repos/lennoxmeldrum/wordcell/dispatches -f event_type=upstream-moved
