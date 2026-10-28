@@ -8,8 +8,9 @@ own commit and is meant to be offered upstream; when upstream has it, drop it he
 | # | Change | Commit subject | Upstream PR |
 |---|---|---|---|
 | D1 | `SlideApp::reinstall_context`: install DeckCraft's fonts and theme again | WordCell host: SlideApp::reinstall_context | not yet opened |
+| D2 | `Session::document_mut(uid)`: a host marks any open presentation saved | WordCell host: Session::document_mut by uid | not yet opened |
 
-DeckCraft needs nothing else to be hosted: its `Session` API is public, `integrated_titlebar`
+DeckCraft needs nothing else to be hosted: the rest of its `Session` API is public, `integrated_titlebar`
 already leaves the macOS window buttons to the host, and `SlideApp` draws one window (plus
 Presenter View and View › New Window, which open windows of their own).
 
