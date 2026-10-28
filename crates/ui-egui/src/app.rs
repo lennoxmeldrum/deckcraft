@@ -117,6 +117,14 @@ impl SlideApp {
         self.status = Some((msg.into(), now_ms()));
     }
 
+    /// Install the interface fonts, style and theme again on the next UI pass. For a host that
+    /// shares the egui context with other apps, which install their own (WordCell).
+    pub fn reinstall_context(&mut self) {
+        self.styled = false;
+        self.restyle = true;
+        self.fonts_ready = false;
+    }
+
     /// Turn on the automatic check for a newer release at start-up (desktop shell only; tests and
     /// the web build never touch the network on their own).
     #[cfg(not(target_arch = "wasm32"))]
