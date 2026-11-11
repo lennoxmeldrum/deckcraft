@@ -28,8 +28,10 @@ jobs:
     env:
       UPSTREAM: https://github.com/storytold/deckcraft.git
       GH_TOKEN: ${{ secrets.WORDCELL_BOT_TOKEN }}
+      # gh would otherwise target the "upstream" remote (storytold) for issues and labels.
+      GH_REPO: ${{ github.repository }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with: { ref: wordcell, fetch-depth: 0, token: "${{ secrets.WORDCELL_BOT_TOKEN }}" }
       - name: Mirror upstream main
         run: |
